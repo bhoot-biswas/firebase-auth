@@ -1,5 +1,8 @@
 <?php
 
+/** Requiere the JWT token verifier library. */
+use Firebase\Auth\Token\Verifier;
+
 /**
  * The public-facing functionality of the plugin.
  *
@@ -50,7 +53,7 @@ class Firebase_Auth_Public {
 	public function __construct( $plugin_name, $version ) {
 
 		$this->plugin_name = $plugin_name;
-		$this->version = $version;
+		$this->version     = $version;
 
 	}
 
@@ -98,6 +101,104 @@ class Firebase_Auth_Public {
 
 		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/firebase-auth-public.js', array( 'jquery' ), $this->version, false );
 
+	}
+
+	/**
+	 * [validate_token description]
+	 * @return [type] [description]
+	 */
+	public function validate_token() {
+		/**
+		 * Looking for the HTTP_AUTHORIZATION header, if not present just
+		 * return the user.
+		 * @var [type]
+		 */
+		$auth = isset( $_SERVER['HTTP_AUTHORIZATION'] ) ? $_SERVER['HTTP_AUTHORIZATION'] : false;
+
+		/* Double check for different auth header string (server dependent) */
+		if ( ! $auth ) {
+			$auth = isset( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) ? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] : false;
+		}
+
+		if ( ! auth ) {
+			return new WP_Error(
+				'firebase_auth_no_auth_header',
+				__( 'Authorization header not found.', 'firebase-auth' ),
+				array(
+					'status' => 403,
+				)
+			);
+		}
+
+		/**
+		 * The HTTP_AUTHORIZATION is present verify the format
+		 * if the format is wrong return the user.
+		 * @var [type]
+		 */
+		list($token) = sscanf( $auth, 'Bearer %s' );
+		if ( ! $token ) {
+			return new WP_Error(
+				'firebase_auth_bad_auth_header',
+				__( 'Authorization header malformed.', 'firebase-auth' ),
+				array(
+					'status' => 403,
+				)
+			);
+		}
+
+		/** Get the Secret Key */
+		$secret_key = defined( 'FIREBASE_AUTH_SECRET_KEY' ) ? FIREBASE_AUTH_SECRET_KEY : false;
+		if ( ! $secret_key ) {
+			return new WP_Error(
+				'firebase_auth_bad_config',
+				__( 'Firebase Auth is not configurated properly, please contact the admin.', 'firebase-auth' ),
+				array(
+					'status' => 403,
+				)
+			);
+		}
+
+		/** Try to decode the token */
+		$verifier = new Verifier( $secret_key );
+		try {
+			$verified_id_token = $verifier->verifyIdToken( $token );
+
+			/** Everything looks good, send back the success */
+			return array(
+				'code' => 'firebase_auth_valid_token',
+				'sub'  => $verified_id_token->getClaim( 'sub' ),
+				'data' => array(
+					'status' => 200,
+				),
+			);
+		} catch ( \Firebase\Auth\Token\Exception\ExpiredToken $e ) {
+			/** Expired token, send back the error */
+			return new WP_Error(
+				'firebase_auth_expired_token',
+				$e->getMessage(),
+				array(
+					'status' => 403,
+				)
+			);
+		} catch ( \Firebase\Auth\Token\Exception\IssuedInTheFuture $e ) {
+			/** Issued in future, send back the error */
+			return new WP_Error(
+				'firebase_auth_issued_in_the_future',
+				$e->getMessage(),
+				array(
+					'status' => 403,
+				)
+			);
+		} catch ( \Firebase\Auth\Token\Exception\InvalidToken $e ) {
+			/** Something is wrong trying to decode the token, send back the error */
+			return new WP_Error(
+				'firebase_auth_invalid_token',
+				$e->getMessage(),
+				array(
+					'status' => 403,
+				)
+			);
+		}
 	}
 
 }
