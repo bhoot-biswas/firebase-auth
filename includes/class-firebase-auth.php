@@ -100,9 +100,9 @@ class Firebase_Auth {
 	private function load_dependencies() {
 
 		/**
-         * Load dependecies managed by composer.
-         */
-        require_once plugin_dir_path( dirname( __FILE__ ) ) . 'vendor/autoload.php';
+		 * Load dependecies managed by composer.
+		 */
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'vendor/autoload.php';
 
 		/**
 		 * The class responsible for orchestrating the actions and filters of the
@@ -175,6 +175,7 @@ class Firebase_Auth {
 
 		$plugin_public = new Firebase_Auth_Public( $this->get_plugin_name(), $this->get_version() );
 
+		$this->loader->add_action( 'rest_api_init', $plugin_public, 'add_api_routes' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 
