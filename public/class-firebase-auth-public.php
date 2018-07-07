@@ -86,6 +86,41 @@ class Firebase_Auth_Public {
 	 */
 	public function authorize() {
 		$token = $this->validate_token();
+
+		if ( is_wp_error( $token ) ) {
+			return $token;
+		}
+
+		if ( email_exists( $token['email'][0] ) ) {
+			return new WP_Error(
+				'firebase_auth_email_exists',
+				__( 'Email exists.', 'firebase-auth' ),
+				array(
+					'status' => 403,
+				)
+			);
+		} else {
+			$user_id = wp_insert_user( array(
+				'user_login' => $token['sub'],
+				'user_email' => $token['email'][0],
+				'user_pass'  => wp_generate_password(),
+			));
+
+			if ( is_wp_error( $user_id ) ) {
+				return $user_id;
+			}
+
+			if ( $user_id ) {
+				return array(
+					'code'    => 'firebase_auth_user_inserted',
+					'user_id' => $user_id,
+					'data'    => array(
+						'status' => 200,
+					),
+				);
+			}
+		}
+
 		return $token;
 	}
 
@@ -203,11 +238,11 @@ class Firebase_Auth_Public {
 
 			/** Everything looks good, send back the success */
 			return array(
-				'code'  => 'firebase_auth_valid_token',
-				'iss'   => $verified_id_token->getClaim( 'iss' ),
-				'sub'   => $verified_id_token->getClaim( 'user_id' ),
-				'email' => $verified_id_token->getClaim( 'firebase' )->identities->email,
-				'data'  => array(
+				'code'    => 'firebase_auth_valid_token',
+				'iss'     => $verified_id_token->getClaim( 'iss' ),
+				'user_id' => $verified_id_token->getClaim( 'user_id' ),
+				'email'   => $verified_id_token->getClaim( 'firebase' )->identities->email,
+				'data'    => array(
 					'status' => 200,
 				),
 			);
