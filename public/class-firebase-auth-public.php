@@ -50,6 +50,12 @@ class Firebase_Auth_Public {
 	private $namespace;
 
 	/**
+	 * Store errors to display if the JWT is wrong
+	 * @var [type]
+	 */
+	private $firebase_auth_error = null;
+
+	/**
 	 * Initialize the class and set its properties.
 	 *
 	 * @since    1.0.0
@@ -79,6 +85,59 @@ class Firebase_Auth_Public {
 	 * @return [type] [description]
 	 */
 	public function authorize() {
+		$token = $this->validate_token();
+		return $token;
+	}
+
+	/**
+	 * This is our Middleware to try to authenticate the user according to the
+	 * token send.
+	 * @param  [type] $user [description]
+	 * @return [type]       [description]
+	 */
+	public function determine_current_user( $user ) {
+		/**
+		 * This hook only should run on the REST API requests to determine
+		 * if the user in the Token (if any) is valid, for any other
+		 * normal call ex. wp-admin/.* return the user.
+		 * @var [type]
+		 */
+		$rest_api_slug = rest_get_url_prefix();
+		$valid_api_uri = strpos( $_SERVER['REQUEST_URI'], $rest_api_slug );
+
+		if ( ! $valid_api_uri ) {
+			return $user;
+		}
+
+		/**
+		 * If the request URI is for authorize the user don't do anything,
+		 * this avoid double calls to the validate_token function.
+		 * @var [type]
+		 */
+		$authorize_uri = strpos( $_SERVER['REQUEST_URI'], 'authorize' );
+		if ( $authorize_uri > 0 ) {
+			return $user;
+		}
+
+		$token = $this->validate_token();
+
+		if ( is_wp_error( $token ) ) {
+			if ( $token->get_error_code() != 'firebase_auth_no_auth_header' ) {
+				/** If there is a error, store it to show it after see rest_pre_dispatch */
+				$this->firebase_auth_error = $token;
+			}
+
+			return $user;
+		}
+
+		/** Everything is ok, return the user ID stored in the token*/
+		$user_obj = get_user_by( 'email', $token['email'][0] );
+
+		if ( $user_obj ) {
+			return $user_obj->ID;
+		}
+
+		return $user;
 	}
 
 	/**
@@ -91,6 +150,7 @@ class Firebase_Auth_Public {
 		 * return the user.
 		 * @var [type]
 		 */
+
 		$auth = isset( $_SERVER['HTTP_AUTHORIZATION'] ) ? $_SERVER['HTTP_AUTHORIZATION'] : false;
 
 		/* Double check for different auth header string (server dependent) */
@@ -98,7 +158,7 @@ class Firebase_Auth_Public {
 			$auth = isset( $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ) ? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] : false;
 		}
 
-		if ( ! auth ) {
+		if ( ! $auth ) {
 			return new WP_Error(
 				'firebase_auth_no_auth_header',
 				__( 'Authorization header not found.', 'firebase-auth' ),
@@ -143,9 +203,11 @@ class Firebase_Auth_Public {
 
 			/** Everything looks good, send back the success */
 			return array(
-				'code' => 'firebase_auth_valid_token',
-				'sub'  => $verified_id_token->getClaim( 'sub' ),
-				'data' => array(
+				'code'  => 'firebase_auth_valid_token',
+				'iss'   => $verified_id_token->getClaim( 'iss' ),
+				'sub'   => $verified_id_token->getClaim( 'user_id' ),
+				'email' => $verified_id_token->getClaim( 'firebase' )->identities->email,
+				'data'  => array(
 					'status' => 200,
 				),
 			);
@@ -223,6 +285,20 @@ class Firebase_Auth_Public {
 
 		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/firebase-auth-public.js', array( 'jquery' ), $this->version, false );
 
+	}
+
+	/**
+	 * Filter to hook the rest_pre_dispatch, if the is an error in the request
+	 * send it, if there is no error just continue with the current request.
+	 * @param  [type] $request [description]
+	 * @return [type]          [description]
+	 */
+	public function rest_pre_dispatch( $request ) {
+		if ( is_wp_error( $this->firebase_auth_error ) ) {
+			return $this->firebase_auth_error;
+		}
+
+		return $request;
 	}
 
 }
