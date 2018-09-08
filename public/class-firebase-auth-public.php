@@ -101,7 +101,7 @@ class Firebase_Auth_Public {
 			);
 		} else {
 			$user_id = wp_insert_user( array(
-				'user_login' => $token['sub'],
+				'user_login' => $token['user_login'],
 				'user_email' => $token['email'][0],
 				'user_pass'  => wp_generate_password(),
 			));
@@ -238,11 +238,11 @@ class Firebase_Auth_Public {
 
 			/** Everything looks good, send back the success */
 			return array(
-				'code'    => 'firebase_auth_valid_token',
-				'iss'     => $verified_id_token->getClaim( 'iss' ),
-				'user_id' => $verified_id_token->getClaim( 'user_id' ),
-				'email'   => $verified_id_token->getClaim( 'firebase' )->identities->email,
-				'data'    => array(
+				'code'       => 'firebase_auth_valid_token',
+				'iss'        => $verified_id_token->getClaim( 'iss' ),
+				'user_login' => $verified_id_token->getClaim( 'user_id' ),
+				'email'      => $verified_id_token->getClaim( 'firebase' )->identities->email,
+				'data'       => array(
 					'status' => 200,
 				),
 			);
@@ -273,6 +273,18 @@ class Firebase_Auth_Public {
 					'status' => 403,
 				)
 			);
+		}
+	}
+
+	/**
+	 * Add CORs suppot to the request.
+	 */
+	public function add_cors_support() {
+		$enable_cors = defined( 'FIREBASE_AUTH_CORS_ENABLE' ) ? FIREBASE_AUTH_CORS_ENABLE : false;
+		if ( $enable_cors ) {
+			$headers = apply_filters( 'firebase_auth_cors_allow_headers', 'Access-Control-Allow-Headers, Content-Type, Authorization' );
+			header( sprintf( 'Access-Control-Allow-Headers: %s', $headers ) );
+			header( 'Access-Control-Allow-Origin: *' );
 		}
 	}
 

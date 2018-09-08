@@ -176,6 +176,7 @@ class Firebase_Auth {
 		$plugin_public = new Firebase_Auth_Public( $this->get_plugin_name(), $this->get_version() );
 
 		$this->loader->add_action( 'rest_api_init', $plugin_public, 'add_api_routes' );
+		$this->loader->add_filter( 'rest_api_init', $plugin_public, 'add_cors_support' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 		$this->loader->add_filter( 'determine_current_user', $plugin_public, 'determine_current_user', 10 );
